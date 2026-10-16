@@ -1,0 +1,49 @@
+name: Daily Cat Rotation
+
+on:
+  schedule:
+    # 毎日午前3時17分 (UTC) に実行
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rotate cat image
+        run: |
+          # 年始からの経過日数を取得 (1-366)
+          DAY_OF_YEAR=$(date +%j)
+          
+          # 日数を10進数として扱い、3で割った余りで画像を選択 (0, 1, 2)
+          CAT_INDEX=$((10#$DAY_OF_YEAR % 3 + 1))
+          
+          echo "Day of year: $DAY_OF_YEAR"
+          echo "Selected cat: cat${CAT_INDEX}.gif"
+          
+          # README.md内の画像パスを更新
+          sed -i "s|images/cat[1-3]\.gif|images/cat${CAT_INDEX}.gif|g" README.md
+          
+          # 変更があるか確認
+          if git diff --quiet README.md; then
+            echo "No changes needed"
+            echo "CHANGED=false" >> $GITHUB_ENV
+          else
+            echo "README.md updated"
+            echo "CHANGED=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and push if changed
+        if: env.CHANGED == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "🐱 Daily cat rotation"
+          git push
