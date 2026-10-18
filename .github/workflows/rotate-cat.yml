@@ -5,6 +5,17 @@ on:
     # 毎日午前3時17分 (UTC) に実行
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      cat:
+        description: '表示する猫画像 (auto = 日付で自動選択)'
+        type: choice
+        options:
+          - auto
+          - '1'
+          - '2'
+          - '3'
+        default: auto
+        required: false
 
 # トップレベルでは読み取り専用、書き込みはジョブで明示的に付与
 permissions:
@@ -34,6 +45,9 @@ jobs:
       - name: Rotate cat image
         # scripts/rotate-cat.ts を scriptc でビルドした Linux x64 バイナリ
         # (README.md を更新し、CHANGED=true/false を $GITHUB_ENV に書き出す)
+        # 入力値は run に直接埋め込まず env 経由で渡す (スケジュール実行時は空 = auto)
+        env:
+          CAT_INDEX_OVERRIDE: ${{ inputs.cat }}
         run: |
           set -euo pipefail
           ./bin/rotate-cat

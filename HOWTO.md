@@ -18,7 +18,7 @@
 ### 切り替えの流れ
 
 1. ワークフローがリポジトリを checkout し、`./bin/rotate-cat` を実行する
-2. UTC の年間通算日 `doy` (1〜366) から `doy % 3 + 1` 番目の画像を選ぶ
+2. UTC の年間通算日 `doy` (1〜366) から `doy % 3 + 1` 番目の画像を選ぶ (手動実行で画像を指定した場合はその画像)
 3. `README.md` のマーカー内にある `images/catN.gif` だけを書き換える (マーカー外は変更しない)
 4. 内容が変わったときだけ書き込み、`changed` / `unchanged` を出力する
 5. `$GITHUB_ENV` に `CHANGED=true` / `CHANGED=false` を追記する
@@ -27,7 +27,7 @@
 ### スケジュール
 
 - 毎日 03:17 UTC (= 12:17 JST) に実行 (`cron: '17 3 * * *'`)
-- `workflow_dispatch` で手動実行も可能
+- `workflow_dispatch` で手動実行も可能 (入力 `cat` で画像を指定できる。「4. 使い方」を参照)
 - GitHub の混雑状況により、実際の開始は数分〜数十分遅れることがある
 
 ## 2. 開発環境の構築
@@ -99,7 +99,8 @@ cat "$tmp/env"
 ```
 
 - 通算日 1 → cat2、2 → cat3、3 → cat1 になれば正常
-- `CAT_DAY` が不正な値のときや、マーカーが見つからないときは exit 1 で終了する
+- `CAT_INDEX_OVERRIDE=2 ./rotate-cat` のように画像を直接指定することもできる (未指定 / `auto` なら日付で選択)
+- `CAT_DAY` / `CAT_INDEX_OVERRIDE` が不正な値のときや、マーカーが見つからないときは exit 1 で終了する (README.md と `GITHUB_ENV` は変更しない)
 
 ### 3.5 バイナリを確認してコミットする
 
@@ -115,8 +116,8 @@ git ls-files -s bin/rotate-cat   # 100755 になっていること
 
 | 項目 | 値 |
 |---|---|
-| ファイル | `bin/rotate-cat` (ELF 64-bit x86-64, stripped, 328,256 bytes) |
-| sha256 | `5b375c287e09fb457d72bbaa22ef9423115366aae9d4f8a8912e7b73730c232a` |
+| ファイル | `bin/rotate-cat` (ELF 64-bit x86-64, stripped, 332,736 bytes) |
+| sha256 | `23bb2efee77ff6e1a24a181d51ad68ad1651c548e28a411dd00fe9b5b673587e` |
 | ビルド環境 | Debian 13 (glibc 2.41) / Node.js v24.22.0 / scriptc 0.3.6 / clang 19 |
 | ビルドコマンド | `scriptc build scripts/rotate-cat.ts -o bin/rotate-cat --strip --no-keep-llvm` |
 | 要求 glibc | 2.38 以上 |
@@ -133,7 +134,8 @@ git ls-files -s bin/rotate-cat   # 100755 になっていること
 
 1. `images/catN.gif` の連番で画像を置く (`cat1` から欠番なし)
 2. `scripts/rotate-cat.ts` の `CAT_COUNT` を画像の枚数に変更する
-3. 「3. 開発方法」に沿って再ビルドし、sha256 を更新する
+3. `.github/workflows/rotate-cat.yml` の入力 `cat` の `options` に番号を追加・削除する
+4. 「3. 開発方法」に沿って再ビルドし、sha256 を更新する
 
 ### スケジュールを変更する
 
@@ -147,13 +149,23 @@ on:
 
 ### 手動で実行する
 
-- GitHub の Actions タブ →「Daily Cat Rotation」→「Run workflow」
+入力 `cat` で表示する画像を選べます。
+
+| 値 | 動作 |
+|---|---|
+| `auto` (既定) | スケジュール実行と同じく日付で選択 |
+| `1` / `2` / `3` | `images/catN.gif` に切り替え |
+
+- GitHub の Actions タブ →「Daily Cat Rotation」→「Run workflow」→「cat」で値を選んで「Run workflow」
 - または CLI で実行する
 
 ```sh
-gh workflow run rotate-cat.yml
-gh run watch "$(gh run list --workflow rotate-cat.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+gh workflow run rotate-cat.yml -R tkc310/tkc310              # auto
+gh workflow run rotate-cat.yml -R tkc310/tkc310 -f cat=2     # cat2.gif に切り替え
+gh run watch -R tkc310/tkc310 "$(gh run list -R tkc310/tkc310 --workflow rotate-cat.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
+
+手動で指定した画像は、次のスケジュール実行 (12:17 JST) で日付に応じた画像に戻ります。
 
 ### sed 版に戻す
 
@@ -176,6 +188,7 @@ gh run watch "$(gh run list --workflow rotate-cat.yml --limit 1 --json databaseI
 ```
 
 sed 版はマーカー外の `images/cat[1-3].gif` も置換する点に注意してください。
+また、sed 版は入力 `cat` に対応していないため、戻す場合は `workflow_dispatch` の `inputs` と `env` の `CAT_INDEX_OVERRIDE` も削除してください。
 
 ## 5. セキュリティ
 
@@ -187,6 +200,7 @@ sed 版はマーカー外の `images/cat[1-3].gif` も置換する点に注意�
 - ランナーは `ubuntu-24.04` に固定し、`timeout-minutes: 5` を設定
 - `concurrency` で同時実行を防止 (`cancel-in-progress: false`)
 - 各ステップで `set -euo pipefail`
+- 手動実行の入力 `cat` は `type: choice` で値を限定し、`run` に `${{ }}` で埋め込まず `env` (`CAT_INDEX_OVERRIDE`) 経由で渡す。バイナリ側でも `auto` / `1`〜`3` 以外は exit 1 にする
 - コミットは変更があるときだけ `github-actions[bot]` として行う
 
 ### コミット済みバイナリの扱い
