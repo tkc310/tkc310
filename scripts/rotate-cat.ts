@@ -24,6 +24,20 @@ function dayOfYear(): number {
   return Math.floor((today - startOfYear) / DAY_MS) + 1;
 }
 
+// 手動実行時の画像指定 (workflow_dispatch の入力 cat)。
+// 未指定 / "auto" なら null (日付で選択)、"1"〜CAT_COUNT ならその番号、それ以外はエラー。
+function indexOverride(): number | null {
+  const raw = process.env.CAT_INDEX_OVERRIDE;
+  if (raw === undefined || raw === "" || raw === "auto") {
+    return null;
+  }
+  const n = Number(raw);
+  if (!/^[1-9][0-9]*$/.test(raw) || n > CAT_COUNT) {
+    throw new Error(`invalid CAT_INDEX_OVERRIDE: ${raw} (expected auto or 1-${CAT_COUNT})`);
+  }
+  return n;
+}
+
 function signal(changed: boolean): void {
   const envFile = process.env.GITHUB_ENV;
   if (envFile !== undefined && envFile !== "") {
@@ -32,9 +46,16 @@ function signal(changed: boolean): void {
 }
 
 function main(): void {
-  const day = dayOfYear();
-  const index = (day % CAT_COUNT) + 1;
-  console.log(`Day of year: ${day}`);
+  const override = indexOverride();
+  let index: number;
+  if (override === null) {
+    const day = dayOfYear();
+    index = (day % CAT_COUNT) + 1;
+    console.log(`Day of year: ${day}`);
+  } else {
+    index = override;
+    console.log(`Override: cat${index}.gif`);
+  }
   console.log(`Selected cat: cat${index}.gif`);
 
   const content = readFileSync(README, "utf8");
