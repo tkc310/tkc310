@@ -1,3 +1,3 @@
 <!-- cat:start -->
-<img width="100%" alt="neko" src="images/cat3.gif" />
+<img width="100%" alt="neko" src="images/cat1.gif" />
 <!-- cat:end -->
